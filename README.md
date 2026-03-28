@@ -1,6 +1,13 @@
 # ☕ ecspresso
 
-![ecspresso Logo](ecspreso.png)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](https://docker.com)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+<p align="center">
+  <img src="ecspreso.png" alt="ecspresso Logo" width="300" />
+</p>
 
 **ecspresso** is a DevOps tool designed to centralize and automate the management of environment variables, secrets (AWS SSM), and container *Task Definition* templates for deployments on Amazon ECS (Elastic Container Service).
 
@@ -24,26 +31,32 @@ It allows Development and DevOps teams to manage configurations for multiple app
 
 ---
 
-## 🛠️ Technology Stack
+## 🔒 How Secrets Work
 
-- **Backend:** FastAPI, Uvicorn
-- **Database:** PostgreSQL, SQLAlchemy (ORM)
-- **Security:** PyJWT, Bcrypt
-- **CLI:** Click, Rich, Requests
-- **Infrastructure:** Docker, Docker Compose
+A core philosophy of `ecspresso` is keeping sensitive data out of plain text files. Here is how it handles configuration:
+
+| Type | Storage | ECS Behavior |
+|---|---|---|
+| **Environment Variables** | Kept in `ecspresso` PostgreSQL DB | Injected into ECS as plain-text `environment` key/value pairs |
+| **Secrets** | Created/Stored in AWS SSM Parameter Store | Injected into ECS as `secrets` utilizing their internal SSM ARN `valueFrom` |
+
+> ⚠️ **IAM Permissions Note:** `ecspresso` manages configurations but **does NOT deploy** them. It only merges the templates to produce the valid JSON. Your deployment tool (GitHub Actions, Jenkins, CLI) will take this JSON and push it to AWS. Therefore, `ecspresso` only needs permissions to write to *SSM Parameter Store*. It does not require `ecs:RegisterTaskDefinition` or any compute privileges.
 
 ---
 
 ## 🏃‍♂️ Installation & Quick Start
 
 ### 1. Environment & AWS Configuration (SSM)
-This project uses a `.env` file to manage secrets, Database credentials, and AWS configurations securely (preventing them from leaking into the repository).
+This project uses a `.env` file to manage secrets, Database credentials, and AWS configurations securely.
 
 Copy the example file to create your local environment:
 ```bash
 cp .env.example .env
 ```
-Then edit `.env` by adding your real AWS credentials (so `boto3` can interact with the Parameter Store) and altering passwords if necessary.
+Ensure you provide AWS credentials so `boto3` can interact with the Parameter Store:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
 
 ### 2. Spin Up Local Infrastructure
 
@@ -52,7 +65,6 @@ Clone the repository and bring up both the PostgreSQL database and the API using
 ```bash
 sudo docker compose up -d --build
 ```
-
 The FastAPI backend will now be exposed at `http://localhost:8000`.
 
 ### 3. Populate Database (Seed)
@@ -64,83 +76,95 @@ sudo docker exec -it ecspresso-api-1 python seed.py
 *(This sets up the `admin` user with the password `admin`)*
 
 **Mock Data (Optional Test):**
-If you want to load fake data for testing (like a `payment-service` template with local mock secrets instead of hitting real AWS infrastructure), add the `--mock` flag:
-
+To load fake data (`payment-service` template with local mock variables and secrets) without hitting real AWS infrastructure:
 ```bash
 sudo docker exec -it ecspresso-api-1 python seed.py --mock
 ```
 
 ---
 
-## 💻 Usage in CI/CD & Local CLI (API Key Auth)
+## 💻 Usage in CI/CD & Local CLI
 
-Both your local command-line interface and your CI/CD pipelines (such as **GitHub Actions** or **Jenkins**) interact with `ecspresso` via **API Key** authentication. This prevents managing sessions or JWT Token expirations in automated environments.
+Both your local CLI and CI/CD pipelines use **API Key** authentication. 
 
-### 1. Generating a new Pipeline API Key
-
-The API Key travels as plain text from the client (your CLI or pipeline), but on the server database (`docker-compose.yml` or `.env` file) it is kept securely as a `bcrypt` hash.
-
-If you wish to create your own secure key (e.g. `my-super-secret-key`), you must first generate its hash using Python on your terminal:
-
-```bash
-python -c 'import bcrypt; print(bcrypt.hashpw(b"my-super-secret-key", bcrypt.gensalt()).decode().replace("$", "$$"))'
-```
-
-Copy the output hash (starting with `$$2b$$...`) and configure the `API_KEY_HASH` variable in your `.env` file. Then, restart your docker containers.
-
-### 2. Pipeline / Local CLI Setup
-
-Once the backend is aware of the secure hash, configure your pipeline (or local terminal session) by injecting the raw text key via environment variables:
-
+### 1. Pipeline / Local CLI Setup
+Configure your environment by injecting the raw API Key text:
 ```bash
 export ECSPRESSO_API_KEY="my-super-secret-key"
-export ECSPRESSO_URL="http://localhost:8000" # Optional, defaults to this
+export ECSPRESSO_URL="http://localhost:8000"
 ```
-*(In GitHub Actions, you would save `my-super-secret-key` as a GitHub Secret and map it into the job's `env:` block).*
+*(In GitHub Actions, you would map a GitHub Secret into the job's `env:` block).*
 
-### 3. CLI Commands
+### 2. CLI Commands - Configuration
 
-Once authenticated, use your terminal to manage your ecosystem:
-
-#### Get a Task Definition
-Generates the final ECS JSON with variables mapped, outputting it with rich syntax highlights suitable for piping.
-
-```bash
-python cli.py td get --app payment-service --env development
-```
-*To save the output into a file, append the `--output td.json` or `-o td.json` flag.*
-
-#### Set an Environment Variable
-Automatically creates the application (if it doesn't exist) and registers the variable on the fly:
-
+#### Manage Environment Variables
+Creates the application (if it doesn't exist) and registers a plaintext variable:
 ```bash
 python cli.py set-var --app my-app --env development --key DB_HOST --value localhost
 ```
 
-#### Set a Remote Secret (AWS SSM)
-Creates an AWS Systems Manager Parameter Store secret and returns the ARN:
+#### Manage Secure Secrets
+Creates an AWS SSM Parameter Store secret and returns the ARN reference:
+```bash
+python cli.py set-secret --app my-app --env development --key DB_PASSWORD --value supersecret
+```
+
+### 3. CLI Commands - Generation
+
+#### Get Task Definition
+Generates the final ECS JSON with variables and secrets merged.
 
 ```bash
-python cli.py set-secret --app my-app --env development --key STRIPE_API_KEY --value sk_test_1234
+python cli.py td get --app payment-service --env development -o custom_task.json
+```
+
+**Example Output Generated:**
+```json
+{
+  "family": "payment-service-dev",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "payment-backend",
+      "image": "12345678..dkr.ecr.us-east-1.amazonaws.com/payment:latest",
+      "environment": [
+        {
+          "name": "DB_HOST",
+          "value": "postgres-dev.internal"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:ssm:us-east-1:123456789012:parameter/payment-service/development/DB_PASSWORD"
+        }
+      ]
+    }
+  ]
+}
 ```
 
 ---
 
-## 🔗 Main API Endpoints
+## 🔗 Deep Dive API Endpoints
 
 | Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
-| `GET` | `/` | Returns the static HTML dashboard | - |
-| `GET` | `/health` | Health Check (verifies DB connection) | - |
-| `POST`| `/api/v1/auth/login` | Grants JWT Token for frontend | Basic HTTP |
-| `GET` | `/api/v1/apps/{app}/td` | Generates merged ECS JSON | *JWT* or *API Key* |
+| `GET` | `/` | UI HTML Dashboard | - |
+| `GET` | `/health` | Health Check (verifies DB instance) | - |
+| `POST`| `/api/v1/auth/login` | Login and grant JWT Token | None |
+| `POST`| `/api/v1/variables` | Upsert an application variable | *JWT* or *API Key* |
+| `POST`| `/api/v1/secrets` | Push to AWS SSM and track ARN | *JWT* or *API Key* |
+| `GET` | `/api/v1/apps` | List all tracked applications | *JWT* or *API Key* |
+| `POST`| `/api/v1/apps/{app}/td/template`| Create/Update the base JSON template | *JWT* or *API Key* |
+| `GET` | `/api/v1/apps/{app}/td` | Compile variables & secrets into valid JSON | *JWT* or *API Key* |
 
 ---
 
 ## 🔐 Design & Security Notes
 
-- The `Dockerfile` has been crafted using production-grade security standards, removing root flags and operating under an isolated `appuser`.
-- All passwords and pipeline tokens are encrypted using standard 1-way hashing algorithms (`bcrypt`). 
+- **Docker:** Runs under an isolated `appuser` (non-root execution).
+- **Passwords:** UI credentials are encrypted via standard 1-way hashing (`bcrypt`). 
+- **API Keys:** Pipeline keys are stored strictly in configuration/env hashed; never logged.
 
----
 *Built to improve developer experience in modern DevOps Ecosystems.*
