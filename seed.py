@@ -7,7 +7,6 @@ from app.models import User, App, Environment, TaskDefinitionTemplate, Variable,
 from app.auth import get_password_hash
 
 def seed_admin():
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     
     admin_user = db.query(User).filter(User.username == "admin").first()
