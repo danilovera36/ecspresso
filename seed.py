@@ -66,14 +66,58 @@ def seed_mock_data():
     )
     db.add(template)
 
-    # Variables
+    # Variables Originales
     v1 = Variable(env_id=env.id, key="DB_HOST", value="postgres-dev.internal")
     v2 = Variable(env_id=env.id, key="DB_PORT", value="5432")
-    db.add_all([v1, v2])
+    v3 = Variable(env_id=env.id, key="NODE_ENV", value="development")
+    db.add_all([v1, v2, v3])
 
-    # Secreto de prueba (No va a AWS de verdad usando seed)
+    # Secreto de prueba original
     s1 = Secret(env_id=env.id, key="STRIPE_API_KEY", ssm_path="arn:aws:ssm:us-east-1:123456789012:parameter/payment-service/development/STRIPE_API_KEY")
     db.add(s1)
+
+    # --- NUEVA APP: auth-service ---
+    print("Creating mock data (auth-service)...")
+    app2 = App(name="auth-service")
+    db.add(app2)
+    db.commit()
+    db.refresh(app2)
+
+    env2_dev = Environment(name="development", app_id=app2.id)
+    env2_prod = Environment(name="production", app_id=app2.id)
+    db.add_all([env2_dev, env2_prod])
+    db.commit()
+    db.refresh(env2_dev)
+    db.refresh(env2_prod)
+
+    # Template para auth-service
+    base_json_auth = {
+      "family": "auth-service-dev",
+      "networkMode": "awsvpc",
+      "containerDefinitions": [
+        {
+          "name": "auth-api",
+          "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/auth:latest",
+          "cpu": 512,
+          "memory": 1024,
+          "essential": True,
+          "portMappings": [{"containerPort": 3000, "hostPort": 3000}]
+        }
+      ]
+    }
+    
+    template2 = TaskDefinitionTemplate(
+        env_id=env2_dev.id,
+        target_container="auth-api",
+        base_json=json.dumps(base_json_auth)
+    )
+    db.add(template2)
+
+    # Variables y secretos de auth-service
+    v_a1 = Variable(env_id=env2_dev.id, key="JWT_EXPIRE_HOURS", value="24")
+    v_a2 = Variable(env_id=env2_dev.id, key="LOG_LEVEL", value="DEBUG")
+    s_a1 = Secret(env_id=env2_dev.id, key="JWT_SECRET_KEY", ssm_path="arn:aws:ssm:us-east-1:123456789012:parameter/auth-service/development/JWT_SECRET_KEY")
+    db.add_all([v_a1, v_a2, s_a1])
 
     db.commit()
     db.close()
