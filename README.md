@@ -29,6 +29,14 @@ It allows Development and DevOps teams to manage configurations for multiple app
   - Easily deployable locally with `docker-compose`.
   - Clean Database Abstraction Layer (Repository / CRUD Pattern).
 
+## 📸 Interface Preview
+
+<div align="center">
+  <img src="ui-login.png" alt="ecspresso Login Screen" width="32%" />
+  <img src="ui-vars.png" alt="Variables & Secrets" width="32%" />
+  <img src="ui-templates.png" alt="Task Definition Merger" width="32%" />
+</div>
+
 ---
 
 ## 🔒 How Secrets Work
