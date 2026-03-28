@@ -62,7 +62,7 @@ def seed_mock_data():
     template = TaskDefinitionTemplate(
         env_id=env.id,
         target_container="payment-backend",
-        base_json=base_json
+        base_json=json.dumps(base_json)
     )
     db.add(template)
 
