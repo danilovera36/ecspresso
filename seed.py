@@ -73,7 +73,7 @@ def seed_mock_data():
     db.add_all([v1, v2])
 
     # Secreto de prueba (No va a AWS de verdad usando seed)
-    s1 = Secret(env_id=env.id, key="STRIPE_API_KEY", ssm_arn="arn:aws:ssm:us-east-1:123456789012:parameter/payment-service/development/STRIPE_API_KEY")
+    s1 = Secret(env_id=env.id, key="STRIPE_API_KEY", ssm_path="arn:aws:ssm:us-east-1:123456789012:parameter/payment-service/development/STRIPE_API_KEY")
     db.add(s1)
 
     db.commit()
