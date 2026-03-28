@@ -1,68 +1,70 @@
 # ☕ ecspresso
 
-**ecspresso** es una herramienta de DevOps diseñada para centralizar y automatizar la gestión de variables de entorno, secretos (AWS SSM) y plantillas de *Task Definitions* para despliegues en Amazon ECS (Elastic Container Service). 
+![ecspresso Logo](ecspreso.png)
 
-Permite a los equipos de desarrollo y DevOps gestionar las configuraciones de múltiples aplicaciones y entornos (`development`, `staging`, `production`) a través de una API robusta y una herramienta de línea de comandos (CLI) interactiva y visual.
+**ecspresso** is a DevOps tool designed to centralize and automate the management of environment variables, secrets (AWS SSM), and container *Task Definition* templates for deployments on Amazon ECS (Elastic Container Service).
 
----
-
-## 🚀 Características Principales
-
-- **Gestión Centralizada:** Define las plantillas base JSON de tus contenedores de ECS.
-- **Merge de Variables y Secretos:** Inyecta automáticamente variables de entorno y referencias de secretos (AWS Systems Manager Parameter Store).
-- **Herramienta CLI Enriquecida:** Construida con `click` y `rich` para mostrar salidas formateadas (con sintaxis y color) directamente en la terminal.
-- **Autenticación Dual:**
-  - UI Web protegida por **JWT** y Password Hashing (`bcrypt`).
-  - API protegida por **API Key** (para su uso de forma automatizada en pipelines CI/CD y por la CLI).
-- **Producción Lista:**
-  - Aplicación contenerizada (`Dockerfile` unprivileged running).
-  - Endpoint dedicado de Health Check (`/health`).
-  - Desplegable localmente con `docker-compose`.
-  - Capa de abstracción limpia de base de datos (Patrón Repository / CRUD).
+It allows Development and DevOps teams to manage configurations for multiple applications and environments (`development`, `staging`, `production`) through a robust API and an interactive, visually stunning Command-Line Interface (CLI).
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## 🚀 Key Features
+
+- **Centralized Management:** Define all your base ECS JSON container templates in one place.
+- **Variables & Secrets Merging:** Automatically injects environment variables and secret references (from AWS Systems Manager Parameter Store).
+- **Rich CLI Tool:** Built with `click` and `rich` to provide syntax-highlighted and colored console outputs directly in your terminal.
+- **Dual Authentication:**
+  - Web UI protected by **JWT** and Password Hashing (`bcrypt`).
+  - API protected by **API Key** (perfect for automated use in CI/CD pipelines and by the CLI).
+- **Production Ready:**
+  - Containerized App (unprivileged `Dockerfile`).
+  - Dedicated Health Check endpoint (`/health`).
+  - Easily deployable locally with `docker-compose`.
+  - Clean Database Abstraction Layer (Repository / CRUD Pattern).
+
+---
+
+## 🛠️ Technology Stack
 
 - **Backend:** FastAPI, Uvicorn
-- **Base de Datos:** PostgreSQL, SQLAlchemy (ORM)
-- **Seguridad:** PyJWT, Bcrypt
+- **Database:** PostgreSQL, SQLAlchemy (ORM)
+- **Security:** PyJWT, Bcrypt
 - **CLI:** Click, Rich, Requests
-- **Infraestructura Base:** Docker, Docker Compose
+- **Infrastructure:** Docker, Docker Compose
 
 ---
 
-## 🏃‍♂️ Instalación y Puesta en Marcha
+## 🏃‍♂️ Installation & Quick Start
 
-### 1. Configuración de Variables de Entorno y AWS (SSM)
-El proyecto utiliza un archivo `.env` para gestionar secretos, credenciales de Base de Datos y de AWS securely (para evitar subirlos a repositorios).
+### 1. Environment & AWS Configuration (SSM)
+This project uses a `.env` file to manage secrets, Database credentials, and AWS configurations securely (preventing them from leaking into the repository).
 
-Copia el archivo de ejemplo para crear tu entorno local:
+Copy the example file to create your local environment:
 ```bash
 cp .env.example .env
 ```
-Luego edita `.env` agregando tus credenciales de AWS y cambiando las contraseñas si fuera necesario.
+Then edit `.env` by adding your real AWS credentials (so `boto3` can interact with the Parameter Store) and altering passwords if necessary.
 
-### 2. Levantar la Infraestructura
+### 2. Spin Up Local Infrastructure
 
-Clona el repositorio y levanta la base de datos PostgreSQL junto con la API usando Docker Compose. Esto además construirá la nueva imagen con el usuario sin privilegios.
+Clone the repository and bring up both the PostgreSQL database and the API using Docker Compose. Using `--build` ensures your image is built from scratch securely without root privileges.
 
 ```bash
 sudo docker compose up -d --build
 ```
 
-Esto expondrá la API de FastAPI en `http://localhost:8000`.
+The FastAPI backend will now be exposed at `http://localhost:8000`.
 
-### 3. Poblar la Base de Datos (Seed)
-Para autenticarte de forma local u observar datos precargados, usa el servicio de semilla de datos principal.
+### 3. Populate Database (Seed)
+To log in locally or inspect pre-loaded data, run the main seed script against the container.
 
 ```bash
 sudo docker exec -it ecspresso-api-1 python seed.py
 ```
-*(Crea al usuario `admin` con contraseña `admin`)*
+*(This sets up the `admin` user with the password `admin`)*
 
-**Datos de Prueba (Opcional):**
-Si quieres cargar datos falsos (mock) sobre una Task Definition local para jugar con la CLI sin AWS real, añade el flag `--mock`:
+**Mock Data (Optional Test):**
+If you want to load fake data for testing (like a `payment-service` template with local mock secrets instead of hitting real AWS infrastructure), add the `--mock` flag:
 
 ```bash
 sudo docker exec -it ecspresso-api-1 python seed.py --mock
@@ -70,53 +72,53 @@ sudo docker exec -it ecspresso-api-1 python seed.py --mock
 
 ---
 
-## 💻 Uso en CI/CD y CLI (Autenticación por API Key)
+## 💻 Usage in CI/CD & Local CLI (API Key Auth)
 
-Tanto tu línea de comandos local como los pipelines de CI/CD (por ejemplo, **GitHub Actions** o **Jenkins**) interactúan con `ecspresso` mediante autenticación por **API Key**. Esto evita tener que gestionar sesiones o expiraciones de Tokens JWT en entornos automatizados.
+Both your local command-line interface and your CI/CD pipelines (such as **GitHub Actions** or **Jenkins**) interact with `ecspresso` via **API Key** authentication. This prevents managing sessions or JWT Token expirations in automated environments.
 
-### 1. ¿Cómo crear una nueva API Key para tu Pipeline?
+### 1. Generating a new Pipeline API Key
 
-La API Key viaja en texto plano desde el cliente (tu CLI o Jenkins), pero en el servidor (`docker-compose.yml`) se guarda de forma segura como un hash de `bcrypt`.
+The API Key travels as plain text from the client (your CLI or pipeline), but on the server database (`docker-compose.yml` or `.env` file) it is kept securely as a `bcrypt` hash.
 
-Si deseas crear tu propia clave secreta (ej. `mi-clave-super-segura`), primero debes generar su Hash usando Python en tu terminal:
-
-```bash
-python -c 'import bcrypt; print(bcrypt.hashpw(b"mi-clave-super-segura", bcrypt.gensalt()).decode().replace("$", "$$"))'
-```
-
-Copia la salida (el hash que empieza con `$$2b$$...`) y pégalo en la variable `API_KEY_HASH` dentro de tu archivo `docker-compose.yml`. Luego reinicia el contenedor para que la tome.
-
-### 2. Configuración en GitHub Actions / Jenkins / CLI
-
-Una vez el backend conoce el hash, debes configurar tu pipeline (o tu entorno local) inyectando la llave original en texto plano mediante variables de entorno:
+If you wish to create your own secure key (e.g. `my-super-secret-key`), you must first generate its hash using Python on your terminal:
 
 ```bash
-export ECSPRESSO_API_KEY="mi-clave-super-segura"
-export ECSPRESSO_URL="http://localhost:8000" # Opcional, por defecto apunta ahí
+python -c 'import bcrypt; print(bcrypt.hashpw(b"my-super-secret-key", bcrypt.gensalt()).decode().replace("$", "$$"))'
 ```
-*(En GitHub Actions guardarías `mi-clave-super-segura` como un GitHub Secret y se lo inyectarías al job).*
 
----
+Copy the output hash (starting with `$$2b$$...`) and configure the `API_KEY_HASH` variable in your `.env` file. Then, restart your docker containers.
 
-## 🔧 Uso de la CLI
+### 2. Pipeline / Local CLI Setup
 
-#### 1. Obtener una Task Definition
-Devuelve el JSON final de la *Task Definition* listo para inyectarse en el comando de AWS CLI (con sintaxis enriquecida):
+Once the backend is aware of the secure hash, configure your pipeline (or local terminal session) by injecting the raw text key via environment variables:
+
+```bash
+export ECSPRESSO_API_KEY="my-super-secret-key"
+export ECSPRESSO_URL="http://localhost:8000" # Optional, defaults to this
+```
+*(In GitHub Actions, you would save `my-super-secret-key` as a GitHub Secret and map it into the job's `env:` block).*
+
+### 3. CLI Commands
+
+Once authenticated, use your terminal to manage your ecosystem:
+
+#### Get a Task Definition
+Generates the final ECS JSON with variables mapped, outputting it with rich syntax highlights suitable for piping.
 
 ```bash
 python cli.py td get --app payment-service --env development
 ```
-*Si deseas guardarlo en un archivo, añade el flag `--output td.json` o `-o td.json`.*
+*To save the output into a file, append the `--output td.json` or `-o td.json` flag.*
 
-#### 2. Establecer una Variable de Entorno
-Crea la aplicación (si no existe) y define la variable al vuelo para un entorno específico:
+#### Set an Environment Variable
+Automatically creates the application (if it doesn't exist) and registers the variable on the fly:
 
 ```bash
 python cli.py set-var --app my-app --env development --key DB_HOST --value localhost
 ```
 
-#### 3. Establecer un Secreto (AWS SSM)
-Define un secreto de forma remota y guarda la referencia segura:
+#### Set a Remote Secret (AWS SSM)
+Creates an AWS Systems Manager Parameter Store secret and returns the ARN:
 
 ```bash
 python cli.py set-secret --app my-app --env development --key STRIPE_API_KEY --value sk_test_1234
@@ -124,21 +126,21 @@ python cli.py set-secret --app my-app --env development --key STRIPE_API_KEY --v
 
 ---
 
-## 🔗Endpoints Principales de la API
+## 🔗 Main API Endpoints
 
-| Método | Endpoint | Descripción | Requiere Autenticación |
+| Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
-| `GET` | `/` | Retorna el dashboard estático en HTML | - |
-| `GET` | `/health` | Health Check (verifica conexión a Base de Datos) | - |
-| `POST`| `/api/v1/auth/login` | Otorga el token JWT para el frontend | Basic HTTP |
-| `GET` | `/api/v1/apps/{app_name}/td` | Genera y combina el JSON de ECS | *JWT* o *API Key* |
+| `GET` | `/` | Returns the static HTML dashboard | - |
+| `GET` | `/health` | Health Check (verifies DB connection) | - |
+| `POST`| `/api/v1/auth/login` | Grants JWT Token for frontend | Basic HTTP |
+| `GET` | `/api/v1/apps/{app}/td` | Generates merged ECS JSON | *JWT* or *API Key* |
 
 ---
 
-## 🔐 Seguridad y Notas de Diseño
+## 🔐 Design & Security Notes
 
-- El `Dockerfile` se construyó bajo estándares seguros de producción, removiendo root flags y creando un `appuser` aislado.
-- Todos los passwords y tokens son asegurados mediante algoritmos actualizados de hashing en un solo sentido. El token provisto estáticamente en tu docker-compose local (`my-secret-api-key`) no debe ser reutilizado en verdaderos ambientes productivos.
+- The `Dockerfile` has been crafted using production-grade security standards, removing root flags and operating under an isolated `appuser`.
+- All passwords and pipeline tokens are encrypted using standard 1-way hashing algorithms (`bcrypt`). 
 
 ---
-*Construido para automatizar la vida de los DevOps.*
+*Built to improve developer experience in modern DevOps Ecosystems.*
