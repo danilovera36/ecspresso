@@ -32,3 +32,12 @@ def set_secret(payload: SecretCreate, db: Session = Depends(get_db)):
     
     db.commit()
     return {"status": "ok", "message": f"Secret {payload.key} saved to SSM.", "arn": arn}
+
+@router.get("/secrets")
+def list_secrets(app_name: str, environment: str, db: Session = Depends(get_db)):
+    app = db.query(App).filter(App.name == app_name).first()
+    if not app: raise HTTPException(status_code=404, detail="App not found")
+    env = db.query(Environment).filter(Environment.app_id == app.id, Environment.name == environment).first()
+    if not env: raise HTTPException(status_code=404, detail="Environment not found")
+    secrets = db.query(Secret).filter(Secret.env_id == env.id).all()
+    return [{"key": sec.key, "ssm_path": sec.ssm_path} for sec in secrets]

@@ -18,3 +18,12 @@ def set_variable(payload: VariableCreate, db: Session = Depends(get_db)):
     else: var = Variable(key=payload.key, value=payload.value, env_id=env.id); db.add(var)
     db.commit()
     return {"status": "ok", "message": f"Variable {payload.key} saved."}
+
+@router.get("/variables")
+def list_variables(app_name: str, environment: str, db: Session = Depends(get_db)):
+    app = db.query(App).filter(App.name == app_name).first()
+    if not app: raise HTTPException(status_code=404, detail="App not found")
+    env = db.query(Environment).filter(Environment.app_id == app.id, Environment.name == environment).first()
+    if not env: raise HTTPException(status_code=404, detail="Environment not found")
+    variables = db.query(Variable).filter(Variable.env_id == env.id).all()
+    return [{"key": var.key, "value": var.value} for var in variables]
